@@ -7,27 +7,34 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Vi bruker en stabil Ubuntu-versjon
 
     steps:
-      # Bruker v4 som er påkrevd i 2026
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
         run: |
           sudo apt update
           sudo apt install -y git zip unzip autoconf automake libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
-          python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv
+          sudo apt install -y openjdk-17-jdk  # Påkrevd for Android-bygging
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv buildozer
 
       - name: Build with Buildozer
-        # Vi bruker den offisielle buildozer-action eller en stabil v1
-        uses: ArtemShatriton/buildozer-action@v1
-        with:
-          command: buildozer android debug
-          buildozer_version: master
+        run: |
+          # Vi legger til 'yes' for å automatisk godta alle Android-lisenser
+          yes | /home/runner/.local/bin/buildozer android debug
+        env:
+          # Buildozer trenger av og til disse for å finne riktig sti
+          PATH: /home/runner/.local/bin:$PATH
 
       - name: Upload APK
-        # VIKTIG: Oppgradert til v4 for å unngå 'Deprecation' feilen
         uses: actions/upload-artifact@v4
         with:
           name: PedagogiskArkiv-App
