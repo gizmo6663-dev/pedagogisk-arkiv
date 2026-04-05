@@ -21,21 +21,21 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt update
-          # Vi legger til ALLE nødvendige utviklerverktøy for 2026-miljøet
+          # Vi legger til alt av nødvendige biblioteker for kompilering på Ubuntu 24.04/25.04
           sudo apt install -y git coreutils patch zip unzip autoconf automake libtool pkg-config zlib1g-dev \
           libncurses-dev cmake libffi-dev libssl-dev libsqlite3-dev lld openjdk-17-jdk python3-dev build-essential
           
           python3 -m pip install --upgrade pip
           python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv setuptools wheel
-          # Installerer nyeste Buildozer direkte fra kilden
+          # Vi henter Buildozer direkte fra kilden
           python3 -m pip install --user https://github.com/kivy/buildozer/archive/master.zip
 
       - name: Build with Buildozer
         run: |
           export PATH=$PATH:~/.local/bin/
-          # Vi godtar lisenser først separat for å unngå 'Broken pipe'
-          yes | buildozer android sdkmanager -- update
-          # Så kjører vi selve bygget
+          # Vi bruker 'yes' direkte på selve bygget. 
+          # Buildozer vil selv starte Android SDK-verktøyene og spørre om lisenser, 
+          # og da svarer 'yes' automatisk for oss.
           yes | buildozer android debug
         env:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
