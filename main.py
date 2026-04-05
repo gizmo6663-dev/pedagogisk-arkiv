@@ -4,6 +4,7 @@ from kivymd.uix.card import MDCard
 from kivymd.uix.label import MDLabel
 from kivymd.uix.button import MDIconButton, MDRaisedButton
 from kivymd.uix.boxlayout import MDBoxLayout
+from kivy.clock import Clock
 import requests
 import sqlite3
 import webbrowser
@@ -17,14 +18,14 @@ def init_db():
     conn.commit()
     conn.close()
 
-# --- Brukergrensesnitt (KV-språk) ---
+# --- Brukergrensesnitt (KV) ---
 KV = '''
 MDBoxLayout:
     orientation: 'vertical'
-    md_bg_color: "#F0F2F5"
+    md_bg_color: "#F8F9FA"
 
     MDTopAppBar:
-        title: "Pedagogisk Arkiv"
+        title: "Pedagogisk Arkiv (OpenAlex)"
         elevation: 4
         md_bg_color: "#1A237E"
         right_action_items: [["bookmark", lambda x: app.show_saved()], ["refresh", lambda x: app.clear_results()]]
@@ -36,16 +37,15 @@ MDBoxLayout:
 
         MDTextField:
             id: search_input
-            hint_text: "Søk bredt i faglitteratur..."
-            helper_text: "Psykologi, pedagogikk, etikk, sosiologi"
-            helper_text_mode: "persistent"
+            hint_text: "Søk i faglitteratur..."
+            helper_text: "F.eks. 'Reggio Emilia', 'Inkludering', 'Lek'"
+            helper_text_mode: "on_focus"
             mode: "rectangle"
             on_text_validate: app.search_articles()
-            line_color_focus: "#1A237E"
 
         MDLabel:
             id: info_label
-            text: "Klar for tverrfaglig søk"
+            text: "Klar for søk i OpenAlex-databasen"
             theme_text_color: "Hint"
             font_style: "Caption"
             halign: "center"
@@ -53,6 +53,7 @@ MDBoxLayout:
             height: dp(20)
 
         MDRaisedButton:
+            id: search_button
             text: "START AKADEMISK SØK"
             md_bg_color: "#1A237E"
             pos_hint: {"center_x": .5}
@@ -66,63 +67,67 @@ MDBoxLayout:
 
 class PedagogiskApp(MDApp):
     def build(self):
-        self.theme_cls.primary_palette = "Blue"
-        self.theme_cls.theme_style = "Light"
+        self.theme_cls.primary_palette = "Indigo"
         init_db()
         return Builder.load_string(KV)
 
     def search_articles(self):
-        # Dette er funksjonen som feilet pga innrykk - nå er den på plass!
         query = self.root.ids.search_input.text.strip()
-        if not query:
-            return
-            
-        self.root.ids.results_list.clear_widgets()
-        self.root.ids.info_label.text = "Kobler til forskningsdatabase..."
+        if not query: return
         
-        # Header som får appen til å se ut som en mobilnettleser
-        headers = {'User-Agent': 'Mozilla/5.0 (Linux; Android 10)'}
-        broad_context = f"({query}) AND (child OR children OR education OR psychology OR ethics)"
+        # Deaktiver knapp og tøm liste
+        self.root.ids.search_button.disabled = True
+        self.root.ids.results_list.clear_widgets()
+        self.root.ids.info_label.text = "Søker i 250 millioner artikler..."
+
+        # OpenAlex Parametere
+        # mailto-parameteren gjør at du havner i deres "Polite Pool" (raskere/færre feil)
+        params = {
+            'search': query,
+            'mailto': 'din-epost@test.no',  # Legg gjerne inn din ekte e-post her
+            'per_page': 15
+        }
 
         try:
-            url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={broad_context}&limit=15&fields=title,abstract,url,year,fieldsOfStudy"
-            
-            # Vi legger til timeout og headers for Android-stabilitet
-            response = requests.get(url, headers=headers, timeout=15)
+            url = "https://api.openalex.org/works"
+            response = requests.get(url, params=params, timeout=15)
             
             if response.status_code == 200:
                 data = response.json()
-                if "data" in data and data["data"]:
-                    for paper in data["data"]:
-                        self.add_article_card(paper)
-                    self.root.ids.info_label.text = f"Fant {len(data['data'])} artikler"
-                else:
-                    self.root.ids.info_label.text = "Ingen treff. Prøv bredere ord."
-            else:
-                self.root.ids.info_label.text = f"API-feil: Status {response.status_code}"
+                results = data.get("results", [])
                 
-        except requests.exceptions.SSLError:
-            self.root.ids.info_label.text = "Sikkerhetsfeil (SSL). Sjekk dato/tid på tlf."
-        except requests.exceptions.ConnectionError:
-            self.root.ids.info_label.text = "Ingen internettforbindelse."
+                if results:
+                    for work in results:
+                        self.add_article_card(work)
+                    self.root.ids.info_label.text = f"Fant {len(results)} relevante treff"
+                else:
+                    self.root.ids.info_label.text = "Ingen treff funnet."
+            else:
+                self.root.ids.info_label.text = f"Server-feil: {response.status_code}"
+                
         except Exception as e:
-            self.root.ids.info_label.text = f"Feil: {str(e)[:30]}"
-
-    def add_article_card(self, paper):
-        title = paper.get("title", "Uten tittel")
-        year = paper.get("year", "N/A")
-        abstract = paper.get("abstract", "")
-        fields = ", ".join(paper.get("fieldsOfStudy", [])) if paper.get("fieldsOfStudy") else "Generelt"
-        url = paper.get("url", "#")
+            self.root.ids.info_label.text = "Tilkoblingsfeil. Sjekk internett."
         
-        # Lager kortet med riktig høyde og design
+        # Re-aktiver knappen etter en kort pause
+        Clock.schedule_once(lambda dt: setattr(self.root.ids.search_button, 'disabled', False), 1)
+
+    def add_article_card(self, work):
+        # Henter data fra OpenAlex-formatet
+        title = work.get("display_name", "Uten tittel")
+        year = work.get("publication_year", "N/A")
+        url = work.get("doi") or work.get("id") or "#"
+        
+        # OpenAlex lagrer abstracts i et komplisert format (Inverted Index).
+        # For enkelhets skyld viser vi kilde/type her i stedet.
+        source = work.get("primary_location", {}).get("source", {}).get("display_name", "Akademisk kilde")
+        
         card = MDCard(
             orientation='vertical', 
             padding=15, 
             size_hint=(1, None), 
-            height="220dp", 
+            height="180dp", 
             elevation=2, 
-            radius=[10, 10, 10, 10],
+            radius=[12, 12, 12, 12],
             md_bg_color="#FFFFFF"
         )
         
@@ -131,54 +136,50 @@ class PedagogiskApp(MDApp):
             font_style="Subtitle1", 
             bold=True, 
             size_hint_y=None, 
-            height="50dp"
+            height="60dp"
         ))
         
         card.add_widget(MDLabel(
-            text=f"Felt: {fields}", 
+            text=f"Publisert i: {source}", 
             font_style="Caption", 
-            theme_text_color="Custom", 
-            text_color="#1A237E", 
+            theme_text_color="Secondary",
             size_hint_y=None, 
-            height="20dp"
-        ))
-        
-        summary = (abstract[:180] + "...") if abstract else "Klikk LES for mer info og konklusjon."
-        card.add_widget(MDLabel(
-            text=summary, 
-            font_style="Body2", 
-            theme_text_color="Secondary", 
-            italic=True
+            height="30dp"
         ))
         
         actions = MDBoxLayout(adaptive_height=True, spacing=10, padding=[0, 10, 0, 0])
+        
+        # "LES"-knapp som åpner nettleseren
         actions.add_widget(MDRaisedButton(
-            text="LES", 
-            md_bg_color="#1A237E", 
+            text="LES ARTIKKEL", 
+            md_bg_color="#1A237E",
             on_release=lambda x: webbrowser.open(url)
         ))
+        
+        # Lagre-knapp
         actions.add_widget(MDIconButton(
             icon="bookmark-plus", 
-            on_release=lambda x: self.save_to_db(paper)
+            on_release=lambda x: self.save_to_db(work)
         ))
         
         card.add_widget(actions)
         self.root.ids.results_list.add_widget(card)
 
-    def save_to_db(self, paper):
+    def save_to_db(self, work):
         conn = sqlite3.connect("pedagogisk_arkiv.db")
         cursor = conn.cursor()
         try:
             cursor.execute("INSERT INTO saved VALUES (?, ?, ?, ?)", 
-                           (paper.get('paperId'), paper['title'], paper.get('abstract', ''), paper.get('url', '')))
+                           (work.get('id'), work.get('display_name'), "Lagret fra OpenAlex", work.get('doi')))
             conn.commit()
+            self.root.ids.info_label.text = "Artikkel lagret i arkivet!"
         except:
-            pass
+            self.root.ids.info_label.text = "Allerede lagret."
         conn.close()
 
     def show_saved(self):
         self.root.ids.results_list.clear_widgets()
-        self.root.ids.info_label.text = "Lagret faglitteratur"
+        self.root.ids.info_label.text = "Ditt lagrede arkiv"
         conn = sqlite3.connect("pedagogisk_arkiv.db")
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM saved")
@@ -186,11 +187,17 @@ class PedagogiskApp(MDApp):
         conn.close()
         
         if not rows:
-            self.root.ids.results_list.add_widget(MDLabel(text="Arkivet er tomt.", halign="center"))
+            self.root.ids.results_list.add_widget(MDLabel(text="Ingen lagrede artikler ennå.", halign="center"))
         else:
             for row in rows:
-                paper_data = {"paperId": row[0], "title": row[1], "abstract": row[2], "url": row[3]}
-                self.add_article_card(paper_data)
+                # Lager et enkelt objekt for å gjenbruke add_article_card
+                fake_work = {
+                    'display_name': row[1],
+                    'publication_year': 'Arkivert',
+                    'doi': row[3],
+                    'id': row[0]
+                }
+                self.add_article_card(fake_work)
 
     def clear_results(self):
         self.root.ids.results_list.clear_widgets()
