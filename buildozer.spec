@@ -15,6 +15,7 @@ fullscreen = 0
 # Android spesifikasjoner
 android.permissions = INTERNET
 android.api = 33
+android.sdk_buildtools = 33.0.0
 android.minapi = 21
 android.ndk = 25b
 android.archs = arm64-v8a, armeabi-v7a
