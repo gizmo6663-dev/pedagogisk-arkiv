@@ -21,22 +21,21 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt update
-          # Vi legger til alt av nødvendige biblioteker for kompilering på Ubuntu 24.04/25.04
-          sudo apt install -y git coreutils patch zip unzip autoconf automake libtool pkg-config zlib1g-dev \
-          libncurses-dev cmake libffi-dev libssl-dev libsqlite3-dev lld openjdk-17-jdk python3-dev build-essential
+          # Vi legger til m4, libtool og autotools-dev for å fikse LT_SYS_SYMBOL_USCORE feilen
+          sudo apt install -y git coreutils patch zip unzip autoconf automake libtool m4 autotools-dev \
+          pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev libsqlite3-dev lld \
+          openjdk-17-jdk python3-dev build-essential
           
           python3 -m pip install --upgrade pip
           python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv setuptools wheel
-          # Vi henter Buildozer direkte fra kilden
           python3 -m pip install --user https://github.com/kivy/buildozer/archive/master.zip
 
       - name: Build with Buildozer
         run: |
           export PATH=$PATH:~/.local/bin/
-          # Vi bruker 'yes' direkte på selve bygget. 
-          # Buildozer vil selv starte Android SDK-verktøyene og spørre om lisenser, 
-          # og da svarer 'yes' automatisk for oss.
-          yes | buildozer android debug
+          # Vi godtar lisenser og kjører bygget
+          # Bruker 'stdbuf' for å hindre 'Broken pipe' ved å buffre utdata bedre
+          yes | stdbuf -oL buildozer android debug
         env:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
           PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/runner/.local/bin
