@@ -21,21 +21,19 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt update
-          # Vi legger til 'lld' og 'libsqlite3-dev' som er avgjørende for moderne bygg
           sudo apt install -y git coreutils patch zip unzip autoconf automake libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev libsqlite3-dev lld
           sudo apt install -y openjdk-17-jdk
           python3 -m pip install --upgrade pip
           python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv setuptools
-          # Vi tvinger installasjon av Buildozer fra master-grenen for best kompatibilitet
           python3 -m pip install --user https://github.com/kivy/buildozer/archive/master.zip
 
       - name: Build with Buildozer
         run: |
           export PATH=$PATH:~/.local/bin/
-          # Vi fjerner 'yes |' og bruker --requirements sjekk direkte for å se feilen bedre hvis det stopper
-          buildozer android debug || buildozer android debug
+          # Vi bruker 'yes' for å automatisk svare JA på alle lisensspørsmål (Build-Tools 37 osv.)
+          # Vi kjører kommandoen to ganger med || for å håndtere at første kjøring ofte laster ned SDK-en
+          yes | buildozer android debug || yes | buildozer android debug
         env:
-          # Vi sikrer at Buildozer bruker riktig Java og linker
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
           PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/runner/.local/bin
 
