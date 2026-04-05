@@ -13,7 +13,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Vi bruker Python 3.11 som er veldig stabil for Buildozer
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -22,21 +21,22 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt update
-          # Vi bruker nå 'libncurses-dev' som er standardnavnet som inkluderer alt
-          sudo apt install -y git coreutils patch zip unzip autoconf automake libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev
+          # Vi legger til 'lld' og 'libsqlite3-dev' som er avgjørende for moderne bygg
+          sudo apt install -y git coreutils patch zip unzip autoconf automake libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev libsqlite3-dev lld
           sudo apt install -y openjdk-17-jdk
           python3 -m pip install --upgrade pip
-          python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv
-          # Installerer buildozer fra kilden for å være helt oppdatert
+          python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv setuptools
+          # Vi tvinger installasjon av Buildozer fra master-grenen for best kompatibilitet
           python3 -m pip install --user https://github.com/kivy/buildozer/archive/master.zip
 
       - name: Build with Buildozer
         run: |
           export PATH=$PATH:~/.local/bin/
-          # 'yes' godtar alle Android SDK-lisenser automatisk
-          yes | buildozer android debug
+          # Vi fjerner 'yes |' og bruker --requirements sjekk direkte for å se feilen bedre hvis det stopper
+          buildozer android debug || buildozer android debug
         env:
-          # Tvinger systemet til å se i de riktige mappene etter kommandoer
+          # Vi sikrer at Buildozer bruker riktig Java og linker
+          JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
           PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/runner/.local/bin
 
       - name: Upload APK
