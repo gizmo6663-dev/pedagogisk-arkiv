@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # Vi bruker en stabil Ubuntu-versjon
+    runs-on: ubuntu-latest  # Vi går tilbake til latest for best kompatibilitet
 
     steps:
       - name: Checkout code
@@ -18,21 +18,26 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies
+      - name: Install System Dependencies
         run: |
           sudo apt update
-          sudo apt install -y git zip unzip autoconf automake libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
-          sudo apt install -y openjdk-17-jdk  # Påkrevd for Android-bygging
+          # Vi tvinger installasjon av git og coreutils (hvor 'yes' ligger)
+          sudo apt install -y git coreutils patch zip unzip autoconf automake libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+          sudo apt install -y openjdk-17-jdk
           python3 -m pip install --upgrade pip
-          python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv buildozer
+          # Vi installerer Buildozer direkte fra kilden for å få nyeste versjon
+          python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv
+          python3 -m pip install --user https://github.com/kivy/buildozer/archive/master.zip
 
       - name: Build with Buildozer
         run: |
-          # Vi legger til 'yes' for å automatisk godta alle Android-lisenser
-          yes | /home/runner/.local/bin/buildozer android debug
+          # Vi sørger for at stien til buildozer er kjent
+          export PATH=$PATH:~/.local/bin/
+          # Vi kjører build med 'yes' for å godta lisenser
+          yes | buildozer android debug
         env:
-          # Buildozer trenger av og til disse for å finne riktig sti
-          PATH: /home/runner/.local/bin:$PATH
+          # Dette hjelper Buildozer med å finne verktøyene i GitHub-miljøet
+          PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/runner/.local/bin
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
