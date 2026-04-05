@@ -10,7 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      # Bruker v4 som er påkrevd i 2026
+      - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -19,13 +20,15 @@ jobs:
           python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv
 
       - name: Build with Buildozer
+        # Vi bruker den offisielle buildozer-action eller en stabil v1
         uses: ArtemShatriton/buildozer-action@v1
         with:
           command: buildozer android debug
           buildozer_version: master
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        # VIKTIG: Oppgradert til v4 for å unngå 'Deprecation' feilen
+        uses: actions/upload-artifact@v4
         with:
-          name: package
+          name: PedagogiskArkiv-App
           path: bin/*.apk
