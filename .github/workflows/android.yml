@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # Vi går tilbake til latest for best kompatibilitet
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -21,22 +21,19 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt update
-          # Vi tvinger installasjon av git og coreutils (hvor 'yes' ligger)
-          sudo apt install -y git coreutils patch zip unzip autoconf automake libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+          # Vi har byttet ut libtinfo5 med libtinfo6 og libncurses5 med libncurses6
+          sudo apt install -y git coreutils patch zip unzip autoconf automake libtool pkg-config zlib1g-dev libncurses6-dev libncursesw6-dev libtinfo6 cmake libffi-dev libssl-dev
           sudo apt install -y openjdk-17-jdk
           python3 -m pip install --upgrade pip
-          # Vi installerer Buildozer direkte fra kilden for å få nyeste versjon
           python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv
           python3 -m pip install --user https://github.com/kivy/buildozer/archive/master.zip
 
       - name: Build with Buildozer
         run: |
-          # Vi sørger for at stien til buildozer er kjent
           export PATH=$PATH:~/.local/bin/
-          # Vi kjører build med 'yes' for å godta lisenser
+          # Vi bruker 'yes' for å godta lisenser
           yes | buildozer android debug
         env:
-          # Dette hjelper Buildozer med å finne verktøyene i GitHub-miljøet
           PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/runner/.local/bin
 
       - name: Upload APK
