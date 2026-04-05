@@ -71,25 +71,45 @@ class PedagogiskApp(MDApp):
         init_db()
         return Builder.load_string(KV)
 
-    def search_articles(self):
+        def search_articles(self):
         query = self.root.ids.search_input.text.strip()
         if not query: return
         self.root.ids.results_list.clear_widgets()
-        self.root.ids.info_label.text = "Søker bredt..."
+        self.root.ids.info_label.text = "Søker tverrfaglig..."
         
-        broad_context = f"({query}) AND (child OR children OR education OR psychology OR sociology OR ethics OR 'special needs')"
+        # Vi legger til en "User-Agent" header. Noen API-er blokkerer forespørsler
+        # som ser ut som de kommer fra en "bot" (standard Python-requests).
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10) PedagogiskArkiv/1.0'
+        }
+        
+        broad_context = f"({query}) AND (child OR education OR psychology OR ethics)"
 
         try:
-            url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={broad_context}&limit=20&fields=title,abstract,url,year,fieldsOfStudy"
-            data = requests.get(url, timeout=12).json()
-            if "data" in data:
-                for paper in data["data"]:
-                    self.add_article_card(paper)
-                self.root.ids.info_label.text = f"Fant {len(data['data'])} artikler"
+            url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={broad_context}&limit=15&fields=title,abstract,url,year,fieldsOfStudy"
+            
+            # Vi legger til timeout og headers
+            response = requests.get(url, headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "data" in data and data["data"]:
+                    for paper in data["data"]:
+                        self.add_article_card(paper)
+                    self.root.ids.info_label.text = f"Fant {len(data['data'])} artikler"
+                else:
+                    self.root.ids.info_label.text = "Ingen treff. Prøv bredere ord."
             else:
-                self.root.ids.info_label.text = "Ingen treff."
-        except:
-            self.root.ids.info_label.text = "Feil ved tilkobling."
+                self.root.ids.info_label.text = f"API-feil: Status {response.status_code}"
+                
+        except requests.exceptions.SSLError:
+            self.root.ids.info_label.text = "Sikkerhetsfeil (SSL). Sjekk dato/tid på tlf."
+        except requests.exceptions.ConnectionError:
+            self.root.ids.info_label.text = "Ingen internettforbindelse."
+        except Exception as e:
+            # Denne vil vise oss den nøyaktige feilkoden på skjermen
+            self.root.ids.info_label.text = f"Feil: {str(e)[:30]}"
+
 
     def add_article_card(self, paper):
         title = paper.get("title", "Uten tittel")
