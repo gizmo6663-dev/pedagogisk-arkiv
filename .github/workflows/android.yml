@@ -21,10 +21,10 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt update
-          # Vi legger til m4, libtool og autotools-dev for å fikse LT_SYS_SYMBOL_USCORE feilen
-          sudo apt install -y git coreutils patch zip unzip autoconf automake libtool m4 autotools-dev \
-          pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev libsqlite3-dev lld \
-          openjdk-17-jdk python3-dev build-essential
+          # Vi legger til libltdl-dev og binutils som er kritiske for libtool-makroer
+          sudo apt install -y git coreutils patch zip unzip autoconf automake libtool libltdl-dev \
+          m4 pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev libsqlite3-dev \
+          lld openjdk-17-jdk python3-dev build-essential binutils
           
           python3 -m pip install --upgrade pip
           python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv setuptools wheel
@@ -33,8 +33,8 @@ jobs:
       - name: Build with Buildozer
         run: |
           export PATH=$PATH:~/.local/bin/
-          # Vi godtar lisenser og kjører bygget
-          # Bruker 'stdbuf' for å hindre 'Broken pipe' ved å buffre utdata bedre
+          # Vi bruker 'stdbuf' for å sikre at loggen strømmes riktig og unngå 'Broken pipe'
+          # Vi legger også til en fiks for aclocal hvis systemet fortsatt ikke finner makroene
           yes | stdbuf -oL buildozer android debug
         env:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
