@@ -14,18 +14,18 @@ def init_db():
     conn = sqlite3.connect("pedagogisk_arkiv.db")
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS saved 
-                      (id TEXT PRIMARY KEY, title TEXT, abstract TEXT, url TEXT)''')
+                      (id TEXT PRIMARY KEY, title TEXT, source TEXT, url TEXT)''')
     conn.commit()
     conn.close()
 
-# --- Brukergrensesnitt (KV) ---
+# --- Brukergrensesnitt (KV-språk) ---
 KV = '''
 MDBoxLayout:
     orientation: 'vertical'
-    md_bg_color: "#F8F9FA"
+    md_bg_color: "#F4F7F9"
 
     MDTopAppBar:
-        title: "Pedagogisk Arkiv (OpenAlex)"
+        title: "Pedagogisk Fagarkiv"
         elevation: 4
         md_bg_color: "#1A237E"
         right_action_items: [["bookmark", lambda x: app.show_saved()], ["refresh", lambda x: app.clear_results()]]
@@ -37,15 +37,15 @@ MDBoxLayout:
 
         MDTextField:
             id: search_input
-            hint_text: "Søk i faglitteratur..."
-            helper_text: "F.eks. 'Reggio Emilia', 'Inkludering', 'Lek'"
+            hint_text: "Søk (f.eks. 'lek', 'utemiljø', 'didaktikk')"
+            helper_text: "Søker i OpenAlex og ERIC"
             helper_text_mode: "on_focus"
             mode: "rectangle"
-            on_text_validate: app.search_articles()
+            on_text_validate: app.trigger_search()
 
         MDLabel:
             id: info_label
-            text: "Klar for søk i OpenAlex-databasen"
+            text: "Klar for profesjonelt fagsøk"
             theme_text_color: "Hint"
             font_style: "Caption"
             halign: "center"
@@ -54,15 +54,15 @@ MDBoxLayout:
 
         MDRaisedButton:
             id: search_button
-            text: "START AKADEMISK SØK"
+            text: "HENT LITTERATUR"
             md_bg_color: "#1A237E"
             pos_hint: {"center_x": .5}
-            on_release: app.search_articles()
+            on_release: app.trigger_search()
 
         MDScrollView:
             MDList:
                 id: results_list
-                spacing: dp(15)
+                spacing: dp(12)
 '''
 
 class PedagogiskApp(MDApp):
@@ -71,115 +71,113 @@ class PedagogiskApp(MDApp):
         init_db()
         return Builder.load_string(KV)
 
-    def search_articles(self):
+    def trigger_search(self):
         query = self.root.ids.search_input.text.strip()
         if not query: return
         
-        # Deaktiver knapp og tøm liste
+        # Visuelt feedback
         self.root.ids.search_button.disabled = True
         self.root.ids.results_list.clear_widgets()
-        self.root.ids.info_label.text = "Søker i 250 millioner artikler..."
+        self.root.ids.info_label.text = "Søker i faglitteraturen..."
+        
+        # Kjører selve søket
+        Clock.schedule_once(lambda dt: self.perform_search(query), 0.2)
 
-        # OpenAlex Parametere
-        # mailto-parameteren gjør at du havner i deres "Polite Pool" (raskere/færre feil)
-        params = {
-            'search': query,
-            'mailto': 'din-epost@test.no',  # Legg gjerne inn din ekte e-post her
-            'per_page': 15
-        }
-
+    def perform_search(self, query):
+        combined_results = []
+        
+        # 1. SØK I OPENALEX (Global forskning)
         try:
-            url = "https://api.openalex.org/works"
-            response = requests.get(url, params=params, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                results = data.get("results", [])
-                
-                if results:
-                    for work in results:
-                        self.add_article_card(work)
-                    self.root.ids.info_label.text = f"Fant {len(results)} relevante treff"
-                else:
-                    self.root.ids.info_label.text = "Ingen treff funnet."
-            else:
-                self.root.ids.info_label.text = f"Server-feil: {response.status_code}"
-                
-        except Exception as e:
-            self.root.ids.info_label.text = "Tilkoblingsfeil. Sjekk internett."
-        
-        # Re-aktiver knappen etter en kort pause
-        Clock.schedule_once(lambda dt: setattr(self.root.ids.search_button, 'disabled', False), 1)
+            oa_url = f"https://api.openalex.org/works?search={query}&per_page=10"
+            oa_data = requests.get(oa_url, timeout=10).json()
+            for work in oa_data.get("results", []):
+                combined_results.append({
+                    'title': work.get("display_name"),
+                    'year': work.get("publication_year"),
+                    'source': "OpenAlex (Global)",
+                    'url': work.get("doi") or work.get("id")
+                })
+        except:
+            pass
 
-    def add_article_card(self, work):
-        # Henter data fra OpenAlex-formatet
-        title = work.get("display_name", "Uten tittel")
-        year = work.get("publication_year", "N/A")
-        url = work.get("doi") or work.get("id") or "#"
-        
-        # OpenAlex lagrer abstracts i et komplisert format (Inverted Index).
-        # For enkelhets skyld viser vi kilde/type her i stedet.
-        source = work.get("primary_location", {}).get("source", {}).get("display_name", "Akademisk kilde")
-        
+        # 2. SØK I ERIC (Pedagogikk-spesialist)
+        try:
+            eric_url = f"https://api.ies.ed.gov/eric/?search={query}&format=json&rows=10"
+            eric_data = requests.get(eric_url, timeout=10).json()
+            for doc in eric_data.get("response", {}).get("docs", []):
+                combined_results.append({
+                    'title': doc.get("title"),
+                    'year': doc.get("publicationdate") or "N/A",
+                    'source': "ERIC (Utdanning)",
+                    'url': f"https://eric.ed.gov/?id={doc.get('id')}"
+                })
+        except:
+            pass
+
+        # Oppdater UI med resultater
+        if combined_results:
+            # Sorterer slik at nyeste artikler kommer øverst
+            combined_results.sort(key=lambda x: str(x['year']), reverse=True)
+            for item in combined_results:
+                self.add_article_card(item)
+            self.root.ids.info_label.text = f"Fant {len(combined_results)} artikler"
+        else:
+            self.root.ids.info_label.text = "Ingen treff. Prøv bredere søkeord."
+            
+        self.root.ids.search_button.disabled = False
+
+    def add_article_card(self, item):
+        # Forkorter lange titler for bedre design
+        display_title = item['title']
+        if len(display_title) > 85:
+            display_title = display_title[:82] + "..."
+            
         card = MDCard(
-            orientation='vertical', 
-            padding=15, 
-            size_hint=(1, None), 
-            height="180dp", 
-            elevation=2, 
-            radius=[12, 12, 12, 12],
-            md_bg_color="#FFFFFF"
+            orientation='vertical', padding=15, size_hint=(1, None), 
+            height="160dp", elevation=1, radius=[12], md_bg_color="#FFFFFF"
         )
         
         card.add_widget(MDLabel(
-            text=f"{title} ({year})", 
-            font_style="Subtitle1", 
-            bold=True, 
-            size_hint_y=None, 
-            height="60dp"
+            text=display_title, font_style="Subtitle1", bold=True, 
+            size_hint_y=None, height="60dp"
         ))
         
         card.add_widget(MDLabel(
-            text=f"Publisert i: {source}", 
-            font_style="Caption", 
-            theme_text_color="Secondary",
-            size_hint_y=None, 
-            height="30dp"
+            text=f"{item['source']} | {item['year']}", 
+            font_style="Caption", theme_text_color="Secondary"
         ))
         
         actions = MDBoxLayout(adaptive_height=True, spacing=10, padding=[0, 10, 0, 0])
         
-        # "LES"-knapp som åpner nettleseren
         actions.add_widget(MDRaisedButton(
-            text="LES ARTIKKEL", 
-            md_bg_color="#1A237E",
-            on_release=lambda x: webbrowser.open(url)
+            text="LES", md_bg_color="#1A237E",
+            on_release=lambda x: webbrowser.open(item['url'])
         ))
         
-        # Lagre-knapp
         actions.add_widget(MDIconButton(
-            icon="bookmark-plus", 
-            on_release=lambda x: self.save_to_db(work)
+            icon="bookmark-outline", 
+            on_release=lambda x: self.save_to_db(item)
         ))
         
         card.add_widget(actions)
         self.root.ids.results_list.add_widget(card)
 
-    def save_to_db(self, work):
+    def save_to_db(self, item):
         conn = sqlite3.connect("pedagogisk_arkiv.db")
         cursor = conn.cursor()
         try:
+            # Bruker URL som ID for å unngå duplikater
             cursor.execute("INSERT INTO saved VALUES (?, ?, ?, ?)", 
-                           (work.get('id'), work.get('display_name'), "Lagret fra OpenAlex", work.get('doi')))
+                           (str(item['url']), item['title'], item['source'], item['url']))
             conn.commit()
-            self.root.ids.info_label.text = "Artikkel lagret i arkivet!"
+            self.root.ids.info_label.text = "Lagret i arkivet!"
         except:
             self.root.ids.info_label.text = "Allerede lagret."
         conn.close()
 
     def show_saved(self):
         self.root.ids.results_list.clear_widgets()
-        self.root.ids.info_label.text = "Ditt lagrede arkiv"
+        self.root.ids.info_label.text = "Ditt personlige arkiv"
         conn = sqlite3.connect("pedagogisk_arkiv.db")
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM saved")
@@ -187,17 +185,10 @@ class PedagogiskApp(MDApp):
         conn.close()
         
         if not rows:
-            self.root.ids.results_list.add_widget(MDLabel(text="Ingen lagrede artikler ennå.", halign="center"))
+            self.root.ids.results_list.add_widget(MDLabel(text="Arkivet er tomt.", halign="center"))
         else:
             for row in rows:
-                # Lager et enkelt objekt for å gjenbruke add_article_card
-                fake_work = {
-                    'display_name': row[1],
-                    'publication_year': 'Arkivert',
-                    'doi': row[3],
-                    'id': row[0]
-                }
-                self.add_article_card(fake_work)
+                self.add_article_card({'title': row[1], 'source': row[2], 'year': 'Arkiv', 'url': row[3]})
 
     def clear_results(self):
         self.root.ids.results_list.clear_widgets()
