@@ -1,47 +1,53 @@
-name: Build Android APK
+name: Build APK with Docker
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      clean_build:
+        description: 'Tving clean build (slett .buildozer-cache)'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout code
+      - name: Sjekk ut kode
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Sett opp cache for .buildozer
+        uses: actions/cache@v4
+        id: buildozer-cache
         with:
-          python-version: '3.11'
+          path: ~/.buildozer
+          key: ${{ runner.os }}-buildozer-docker-${{ hashFiles('buildozer.spec') }}-${{ github.event.inputs.clean_build == 'true' && 'clean' || 'normal' }}
+          restore-keys: |
+            ${{ runner.os }}-buildozer-docker-
 
-      - name: Install System Dependencies
+      - name: Bygg APK med Docker
         run: |
-          sudo apt update
-          # Vi legger til libltdl-dev og binutils som er kritiske for libtool-makroer
-          sudo apt install -y git coreutils patch zip unzip autoconf automake libtool libltdl-dev \
-          m4 pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev libsqlite3-dev \
-          lld openjdk-17-jdk python3-dev build-essential binutils
-          
-          python3 -m pip install --upgrade pip
-          python3 -m pip install --user --upgrade Cython==0.29.33 virtualenv setuptools wheel
-          python3 -m pip install --user https://github.com/kivy/buildozer/archive/master.zip
+          # Slett .buildozer hvis clean_build er true
+          if [[ "${{ github.event.inputs.clean_build }}" == "true" ]]; then
+            echo "🧹 Sletter .buildozer-mappe for clean build"
+            rm -rf ~/.buildozer
+          fi
+          docker run --rm \
+            -v "$PWD":/home/user/hostcwd \
+            -v "$HOME/.buildozer":/home/user/.buildozer \
+            kivy/buildozer:latest \
+            android debug
 
-      - name: Build with Buildozer
-        run: |
-          export PATH=$PATH:~/.local/bin/
-          # Vi bruker 'stdbuf' for å sikre at loggen strømmes riktig og unngå 'Broken pipe'
-          # Vi legger også til en fiks for aclocal hvis systemet fortsatt ikke finner makroene
-          yes | stdbuf -oL buildozer android debug
-        env:
-          JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
-          PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/runner/.local/bin
-
-      - name: Upload APK
+      - name: Last opp APK
         uses: actions/upload-artifact@v4
         with:
-          name: PedagogiskArkiv-App
+          name: eldritch-portal-apk
           path: bin/*.apk
+          retention-days: 30
