@@ -5,7 +5,7 @@ package.domain = org.pedagog
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas
 version = 0.1
-requirements = python3, kivy==2.3.0, kivymd==1.2.0, requests, urllib3, certifi, idna, charset-normalizer, sqlite3, openssl, libffi
+requirements = python3, kivy==2.3.0, kivymd==1.2.0, requests, certifi, openssl, libffi
 
 
 orientation = portrait
@@ -20,7 +20,7 @@ android.minapi = 21
 android.sdk_buildtools = 33.0.0
 android.ndk = 25b
 android.ndk_api = 21
-android.archs = arm64-v8a, armeabi-v7a
+android.archs = arm64-v8a
 android.allow_backup = True
 
 # Ikon (valgfritt hvis du har en bildefil)
