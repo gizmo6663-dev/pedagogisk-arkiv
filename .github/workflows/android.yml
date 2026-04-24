@@ -39,6 +39,14 @@ jobs:
             echo "🧹 Sletter .buildozer-mappe for clean build"
             rm -rf ~/.buildozer
           fi
+
+          # Slett ufullstendig SDK-cache hvis build-tools mangler
+          if [ -d "$HOME/.buildozer/android/platform/android-sdk" ] && \
+             [ ! -d "$HOME/.buildozer/android/platform/android-sdk/build-tools" ]; then
+            echo "⚠️ build-tools mangler i cachet SDK – sletter .buildozer for å tvinge reinstallering"
+            rm -rf ~/.buildozer
+          fi
+
           docker run --rm \
             -v "$PWD":/home/user/hostcwd \
             -v "$HOME/.buildozer":/home/user/.buildozer \
@@ -48,6 +56,6 @@ jobs:
       - name: Last opp APK
         uses: actions/upload-artifact@v4
         with:
-          name: eldritch-portal-apk
+          name: pedagogisk-arkiv-apk
           path: bin/*.apk
           retention-days: 30
