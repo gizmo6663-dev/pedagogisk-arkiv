@@ -15,11 +15,11 @@ fullscreen = 0
 
 # Android spesifikasjoner
 android.permissions = INTERNET
-android.api = 33
-android.minapi = 21
-android.sdk_buildtools = 33.0.0
+android.api = 34
+android.minapi = 26
+android.sdk_buildtools = 34.0.0
 android.ndk = 25b
-android.ndk_api = 21
+android.ndk_api = 26
 android.archs = arm64-v8a
 android.allow_backup = True
 
