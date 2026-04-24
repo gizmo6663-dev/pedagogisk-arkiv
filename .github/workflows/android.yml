@@ -28,6 +28,8 @@ jobs:
         id: buildozer-cache
         with:
           path: ~/.buildozer
+          # Cache-nøkkelen inkluderer build-tools-versjonen (via buildozer.spec-hash) slik at
+          # endringer i android.sdk_buildtools alltid gir et cache-miss og ren SDK-installasjon.
           key: ${{ runner.os }}-buildozer-docker-${{ hashFiles('buildozer.spec') }}-${{ github.event.inputs.clean_build == 'true' && 'clean' || 'normal' }}
           restore-keys: |
             ${{ runner.os }}-buildozer-docker-
@@ -40,10 +42,17 @@ jobs:
             rm -rf ~/.buildozer
           fi
 
-          # Slett ufullstendig SDK-cache hvis build-tools mangler
+          # Finn konfigurert build-tools-versjon fra buildozer.spec
+          BUILDTOOLS_VERSION=$(grep -E '^android\.sdk_buildtools\s*=' buildozer.spec | cut -d= -f2 | tr -d ' ')
+          echo "Konfigurert build-tools-versjon: ${BUILDTOOLS_VERSION}"
+
+          # Slett ufullstendig SDK-cache hvis den konfigurerte build-tools-versjonen mangler.
+          # Dette fanger opp tilfeller der build-tools-mappen eksisterer men mangler riktig
+          # versjon (f.eks. etter en gjenbrukt cache med feil versjon), i tillegg til at
+          # hele build-tools-mappen mangler.
           if [ -d "$HOME/.buildozer/android/platform/android-sdk" ] && \
-             [ ! -d "$HOME/.buildozer/android/platform/android-sdk/build-tools" ]; then
-            echo "⚠️ build-tools mangler i cachet SDK – sletter .buildozer for å tvinge reinstallering"
+             [ ! -d "$HOME/.buildozer/android/platform/android-sdk/build-tools/${BUILDTOOLS_VERSION}" ]; then
+            echo "⚠️ build-tools/${BUILDTOOLS_VERSION} mangler i cachet SDK – sletter .buildozer for å tvinge reinstallering"
             rm -rf ~/.buildozer
           fi
 
