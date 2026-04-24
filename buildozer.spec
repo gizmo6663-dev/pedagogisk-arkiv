@@ -24,7 +24,7 @@ android.archs = arm64-v8a, armeabi-v7a
 android.allow_backup = True
 
 # Ikon (valgfritt hvis du har en bildefil)
-# icon.filename = %(source.dir)s/icon.png
+icon.filename = %(source.dir)s/icon/1777036499426.png
 
 [buildozer]
 log_level = 2
