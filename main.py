@@ -499,62 +499,75 @@ class PedagogiskApp(MDApp):
     def add_modern_card(self, item):
         has_authors = bool(item.get('authors'))
         has_abstract = bool(item.get('abstract'))
-        extra_height = (dp(25) if has_authors else 0) + (dp(55) if has_abstract else 0)
+
+        source_colors = {"OPENALEX": "#1565C0", "ERIC": "#00695C"}
+        source_color = source_colors.get(item['source'], "#1A237E")
+
         card = MDCard(
             orientation='vertical',
-            padding=dp(18),
-            size_hint=(1, None),
-            height=dp(170) + extra_height,
+            padding=dp(16),
+            spacing=dp(6),
+            size_hint_x=1,
+            adaptive_height=True,
             elevation=2,
             radius=[dp(16)],
             md_bg_color="#FFFFFF"
         )
 
         # Topplinje med kilde og år
-        source_colors = {"OPENALEX": "#1565C0", "ERIC": "#00695C"}
-        source_color = source_colors.get(item['source'], "#1A237E")
-        header = MDBoxLayout(adaptive_height=True)
-        header.add_widget(MDLabel(
+        header = MDBoxLayout(adaptive_height=True, spacing=dp(4))
+        source_lbl = MDLabel(
             text=item['source'], font_style="Caption",
-            theme_text_color="Custom", text_color=source_color, bold=True
-        ))
-        header.add_widget(MDLabel(
+            theme_text_color="Custom", text_color=source_color, bold=True,
+            size_hint_x=0.7, adaptive_height=True,
+            halign="left", valign="center"
+        )
+        source_lbl.bind(width=lambda inst, val: setattr(inst, 'text_size', (val, None)))
+        header.add_widget(source_lbl)
+        year_lbl = MDLabel(
             text=str(item['year']), font_style="Caption",
-            halign="right", theme_text_color="Hint"
-        ))
+            theme_text_color="Custom", text_color="#757575",
+            size_hint_x=0.3, adaptive_height=True,
+            halign="right", valign="center"
+        )
+        year_lbl.bind(width=lambda inst, val: setattr(inst, 'text_size', (val, None)))
+        header.add_widget(year_lbl)
         card.add_widget(header)
 
         # Tittel
-        display_title = item['title']
-        if len(display_title) > 85:
-            display_title = display_title[:82] + "..."
-        card.add_widget(MDLabel(
-            text=display_title, font_style="Subtitle1", bold=True,
-            size_hint_y=None, height=dp(60)
-        ))
+        title_lbl = MDLabel(
+            text=item['title'], font_style="Subtitle1", bold=True,
+            theme_text_color="Custom", text_color="#212121",
+            adaptive_height=True, halign="left", valign="top"
+        )
+        title_lbl.bind(width=lambda inst, val: setattr(inst, 'text_size', (val, None)))
+        card.add_widget(title_lbl)
 
         # Forfattere
         if has_authors:
-            card.add_widget(MDLabel(
+            auth_lbl = MDLabel(
                 text=f"Forfattere: {item['authors']}",
                 font_style="Caption",
-                theme_text_color="Secondary",
-                size_hint_y=None,
-                height=dp(20)
-            ))
+                theme_text_color="Custom", text_color="#616161",
+                adaptive_height=True, halign="left", valign="top"
+            )
+            auth_lbl.bind(width=lambda inst, val: setattr(inst, 'text_size', (val, None)))
+            card.add_widget(auth_lbl)
 
         # Sammendrag
         if has_abstract:
-            card.add_widget(MDLabel(
+            abs_lbl = MDLabel(
                 text=item['abstract'],
                 font_style="Caption",
-                theme_text_color="Secondary",
-                size_hint_y=None,
-                height=dp(50)
-            ))
+                theme_text_color="Custom", text_color="#424242",
+                adaptive_height=True, halign="left", valign="top"
+            )
+            abs_lbl.bind(width=lambda inst, val: setattr(inst, 'text_size', (val, None)))
+            card.add_widget(abs_lbl)
 
         # Knapper
-        actions = MDBoxLayout(adaptive_height=True, spacing=dp(10))
+        actions = MDBoxLayout(adaptive_height=True, spacing=dp(10),
+                              padding=[0, dp(6), 0, 0])
         actions.add_widget(MDFillRoundFlatButton(
             text="LES MER", font_size="12sp", md_bg_color="#1A237E",
             text_color="#FFFFFF",
