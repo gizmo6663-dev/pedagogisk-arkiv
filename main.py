@@ -37,6 +37,7 @@ PEDAGOGY_FILTER = (
 # Replace with your app's contact email to use the OpenAlex "polite pool"
 MAILTO = "din-epost@example.com"
 CACHE_TTL = 3600  # sekunder (1 time)
+SCROLL_TOP_THRESHOLD = 0.98  # scroll_y-verdi som anses som "toppen"
 
 
 # --- Database ---
@@ -379,7 +380,7 @@ class PedagogiskApp(MDApp):
     def on_scroll(self, scroll_view, scroll_y):
         """Viser/skjuler rull-til-topp-knappen basert på scroll-posisjon."""
         fab = self.root.ids.scroll_top_btn
-        if scroll_y < 0.98:
+        if scroll_y < SCROLL_TOP_THRESHOLD:
             if fab.opacity == 0:
                 fab.disabled = False
                 Animation(opacity=1, duration=0.2).start(fab)
@@ -391,7 +392,7 @@ class PedagogiskApp(MDApp):
 
     def scroll_to_top(self):
         """Ruller til toppen av listen."""
-        Animation(scroll_y=1, d=0.4, t='out_quad').start(
+        Animation(scroll_y=1, duration=0.4, t='out_quad').start(
             self.root.ids.scroll_view
         )
 
