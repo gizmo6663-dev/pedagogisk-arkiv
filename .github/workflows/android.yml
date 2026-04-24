@@ -42,7 +42,7 @@ jobs:
             ${{ runner.os }}-buildozer-docker-bt${{ steps.bt-version.outputs.bt_ver }}-
             ${{ runner.os }}-buildozer-docker-
 
-      - name: Bygg APK med Docker
+      - name: Klargjør Android SDK (cmdline-tools + kompatibilitetssymlenke)
         run: |
           # Slett .buildozer hvis clean_build er true
           if [[ "${{ github.event.inputs.clean_build }}" == "true" ]]; then
@@ -51,8 +51,6 @@ jobs:
           fi
 
           # Slett ufullstendig SDK-cache hvis den påkrevde build-tools-versjonen mangler.
-          # Sjekker den versjonsspesifikke mappen (f.eks. build-tools/33.0.0) – ikke bare
-          # selve build-tools-katalogen – for å unngå feil ved en delvis eller utdatert cache.
           BT_VER="${{ steps.bt-version.outputs.bt_ver }}"
           if [ -d "$HOME/.buildozer/android/platform/android-sdk" ] && \
              [ ! -d "$HOME/.buildozer/android/platform/android-sdk/build-tools/${BT_VER}" ]; then
@@ -60,10 +58,45 @@ jobs:
             rm -rf ~/.buildozer
           fi
 
+          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
+          CMDLINE_TOOLS_DIR="$SDK_DIR/cmdline-tools/latest"
+
+          # Last ned Android cmdline-tools hvis sdkmanager ikke allerede finnes.
+          # Moderne Android SDK leverer sdkmanager via cmdline-tools, ikke via det
+          # utdaterte tools/-pakket som eldre buildozer-versjoner forventet.
+          if [ ! -f "$CMDLINE_TOOLS_DIR/bin/sdkmanager" ]; then
+            echo "📥 Laster ned Android cmdline-tools..."
+            mkdir -p "$CMDLINE_TOOLS_DIR"
+            wget -q \
+              https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+              -O /tmp/cmdlinetools.zip
+            unzip -q /tmp/cmdlinetools.zip -d /tmp/cmdlinetools_extract
+            # Google pakker innholdet i en undermappe kalt "cmdline-tools/"; vi
+            # kopierer det til "latest/" slik at stien cmdline-tools/latest/bin/sdkmanager stemmer.
+            cp -r /tmp/cmdlinetools_extract/cmdline-tools/. "$CMDLINE_TOOLS_DIR/"
+            rm -rf /tmp/cmdlinetools.zip /tmp/cmdlinetools_extract
+            chmod +x "$CMDLINE_TOOLS_DIR/bin/sdkmanager"
+            echo "✅ cmdline-tools installert i $CMDLINE_TOOLS_DIR"
+          else
+            echo "✅ cmdline-tools finnes allerede i cache"
+          fi
+
+          # Opprett wrapper-skript på den legacy-stien som eldre buildozer-versjoner
+          # sjekker (tools/bin/sdkmanager).  Skriptet bruker Docker-intern absolutt sti
+          # fordi ~/.buildozer monteres som /home/user/.buildozer inne i containeren.
+          LEGACY_DIR="$SDK_DIR/tools/bin"
+          mkdir -p "$LEGACY_DIR"
+          if [ ! -f "$LEGACY_DIR/sdkmanager" ]; then
+            # Bruker relativ sti fra skriptets plassering så wrapperen fungerer
+            # uavhengig av Docker-mount-punktet (ingen hardkodet /home/user-sti).
+            printf '#!/bin/sh\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\nexec "$SCRIPT_DIR/../../cmdline-tools/latest/bin/sdkmanager" "$@"\n' \
+              > "$LEGACY_DIR/sdkmanager"
+            chmod +x "$LEGACY_DIR/sdkmanager"
+            echo "✅ Legacy sdkmanager-wrapper opprettet på $LEGACY_DIR/sdkmanager"
+          fi
+
           # Pre-godta Android SDK-lisenser slik at sdkmanager ikke blokkerer på interaktiv input.
-          # sdkmanager ser etter disse filene under $ANDROID_SDK_ROOT/licenses/ og godtar
-          # automatisk lisenser som matcher hashene i filene.
-          LICENSES_DIR="$HOME/.buildozer/android/platform/android-sdk/licenses"
+          LICENSES_DIR="$SDK_DIR/licenses"
           mkdir -p "$LICENSES_DIR"
           printf '\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n' \
             > "$LICENSES_DIR/android-sdk-license"
@@ -73,6 +106,8 @@ jobs:
             > "$LICENSES_DIR/intel-android-extra-license"
           echo "✅ Android SDK-lisenser er forhåndsgodtatt"
 
+      - name: Bygg APK med Docker
+        run: |
           docker run --rm \
             -v "$PWD":/home/user/hostcwd \
             -v "$HOME/.buildozer":/home/user/.buildozer \
