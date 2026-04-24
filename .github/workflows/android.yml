@@ -60,6 +60,19 @@ jobs:
             rm -rf ~/.buildozer
           fi
 
+          # Pre-godta Android SDK-lisenser slik at sdkmanager ikke blokkerer på interaktiv input.
+          # sdkmanager ser etter disse filene under $ANDROID_SDK_ROOT/licenses/ og godtar
+          # automatisk lisenser som matcher hashene i filene.
+          LICENSES_DIR="$HOME/.buildozer/android/platform/android-sdk/licenses"
+          mkdir -p "$LICENSES_DIR"
+          printf '\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n' \
+            > "$LICENSES_DIR/android-sdk-license"
+          printf '\n84831b9409646a918e30573bab4c9c91346d8abd\n' \
+            > "$LICENSES_DIR/android-sdk-preview-license"
+          printf '\nd975f751698a77b662f1254ddbeed3901e976f5a\n' \
+            > "$LICENSES_DIR/intel-android-extra-license"
+          echo "✅ Android SDK-lisenser er forhåndsgodtatt"
+
           docker run --rm \
             -v "$PWD":/home/user/hostcwd \
             -v "$HOME/.buildozer":/home/user/.buildozer \
