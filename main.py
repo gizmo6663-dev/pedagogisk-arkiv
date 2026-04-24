@@ -12,9 +12,10 @@ from kivymd.app import MDApp
 from kivy.lang import Builder
 from kivy.clock import Clock
 from kivy.metrics import dp
+from kivy.animation import Animation
 from kivymd.uix.card import MDCard
 from kivymd.uix.label import MDLabel
-from kivymd.uix.button import MDIconButton, MDFillRoundFlatButton
+from kivymd.uix.button import MDIconButton, MDFillRoundFlatButton, MDFloatingActionButton
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivymd.uix.selectioncontrol import MDSwitch
 import requests
@@ -217,31 +218,36 @@ def fetch_eric(query):
 # --- Design og Layout ---
 KV = '''
 MDScreen:
-    md_bg_color: "#F8F9FA"
+    md_bg_color: "#EEF2F7"
+
     MDBoxLayout:
         orientation: 'vertical'
 
         MDTopAppBar:
             title: "Pedagogisk Fagarkiv"
-            elevation: 0
+            elevation: 2
             md_bg_color: "#1A237E"
-            right_action_items: [["bookmark", lambda x: app.show_saved()], ["history", lambda x: app.clear_results()]]
+            specific_text_color: "#FFFFFF"
+            right_action_items: [["bookmark-outline", lambda x: app.show_saved()], ["history", lambda x: app.clear_results()]]
 
         MDScrollView:
+            id: scroll_view
             do_scroll_x: False
+            on_scroll_y: app.on_scroll(self, self.scroll_y)
+
             MDBoxLayout:
                 orientation: 'vertical'
                 adaptive_height: True
-                padding: [0, 0, 0, dp(20)]
+                padding: [0, 0, 0, dp(80)]
 
                 # Hero-seksjon (Blå bue)
                 MDBoxLayout:
                     orientation: 'vertical'
                     adaptive_height: True
                     md_bg_color: "#1A237E"
-                    padding: [dp(20), dp(10), dp(20), dp(40)]
+                    padding: [dp(24), dp(16), dp(24), dp(48)]
                     radius: [0, 0, dp(30), dp(30)]
-                    spacing: dp(15)
+                    spacing: dp(16)
 
                     MDLabel:
                         text: "Søk i verdens største forskningsarkiv"
@@ -250,60 +256,88 @@ MDScreen:
                         font_style: "H6"
                         halign: "center"
 
-                    MDTextField:
-                        id: search_input
-                        hint_text: "Hva vil du lære mer om?"
-                        mode: "round"
-                        fill_color_normal: "#FFFFFF"
-                        on_text_validate: app.trigger_search()
-                        pos_hint: {"center_x": .5}
+                    # Søkefelt med tøm-knapp
+                    MDBoxLayout:
+                        size_hint_y: None
+                        height: dp(56)
+                        spacing: dp(6)
+
+                        MDTextField:
+                            id: search_input
+                            hint_text: "Hva vil du lære mer om?"
+                            mode: "round"
+                            fill_color_normal: "#FFFFFF"
+                            on_text_validate: app.trigger_search()
+
+                        MDIconButton:
+                            id: clear_search_btn
+                            icon: "close-circle-outline"
+                            theme_text_color: "Custom"
+                            text_color: "#BBCDE8"
+                            size_hint: (None, None)
+                            size: dp(48), dp(48)
+                            pos_hint: {"center_y": 0.5}
+                            on_release: app.clear_search_input()
 
                     MDFillRoundFlatButton:
                         id: search_button
                         text: "HENT ARTIKLER"
-                        md_bg_color: "#FFAB40"
-                        text_color: "#1A237E"
+                        md_bg_color: "#FF8F00"
+                        text_color: "#FFFFFF"
                         pos_hint: {"center_x": .5}
                         on_release: app.trigger_search()
 
-                    # Filtervalgene
+                    # Filtervalgene – fikset layout
                     MDBoxLayout:
                         size_hint_y: None
-                        height: dp(40)
-                        spacing: dp(20)
+                        height: dp(48)
+                        spacing: dp(24)
+                        padding: [dp(8), dp(4), dp(8), dp(4)]
 
                         MDBoxLayout:
-                            spacing: dp(8)
+                            spacing: dp(10)
 
                             MDSwitch:
                                 id: oa_toggle
                                 active: False
+                                size_hint_x: None
+                                width: dp(52)
+                                pos_hint: {"center_y": 0.5}
 
                             MDLabel:
                                 text: "Kun åpen tilgang"
                                 theme_text_color: "Custom"
                                 text_color: "#FFFFFF"
                                 font_style: "Caption"
+                                size_hint_y: None
+                                height: dp(40)
+                                valign: "center"
 
                         MDBoxLayout:
-                            spacing: dp(8)
+                            spacing: dp(10)
 
                             MDSwitch:
                                 id: sort_toggle
                                 active: False
+                                size_hint_x: None
+                                width: dp(52)
+                                pos_hint: {"center_y": 0.5}
 
                             MDLabel:
                                 text: "Nyeste først"
                                 theme_text_color: "Custom"
                                 text_color: "#FFFFFF"
                                 font_style: "Caption"
+                                size_hint_y: None
+                                height: dp(40)
+                                valign: "center"
 
                 # Resultat-område
                 MDBoxLayout:
                     orientation: 'vertical'
                     adaptive_height: True
-                    padding: [dp(15), dp(20), dp(15), 0]
-                    spacing: dp(15)
+                    padding: [dp(16), dp(20), dp(16), dp(8)]
+                    spacing: dp(16)
 
                     MDLabel:
                         id: info_label
@@ -317,11 +351,22 @@ MDScreen:
                         id: chips_box
                         adaptive_height: True
                         spacing: dp(8)
-                        padding: [dp(4), 0, dp(4), 0]
+                        padding: [dp(4), 0, dp(4), dp(4)]
 
                     MDList:
                         id: results_list
-                        spacing: dp(15)
+                        spacing: dp(12)
+
+    # Rull-til-topp-knapp (FAB)
+    MDFloatingActionButton:
+        id: scroll_top_btn
+        icon: "chevron-up"
+        md_bg_color: "#1A237E"
+        elevation: 4
+        pos_hint: {"right": 0.97, "y": 0.04}
+        opacity: 0
+        disabled: True
+        on_release: app.scroll_to_top()
 '''
 
 
@@ -330,6 +375,29 @@ class PedagogiskApp(MDApp):
         self.theme_cls.primary_palette = "Indigo"
         init_db()
         return Builder.load_string(KV)
+
+    def on_scroll(self, scroll_view, scroll_y):
+        """Viser/skjuler rull-til-topp-knappen basert på scroll-posisjon."""
+        fab = self.root.ids.scroll_top_btn
+        if scroll_y < 0.98:
+            if fab.opacity == 0:
+                fab.disabled = False
+                Animation(opacity=1, duration=0.2).start(fab)
+        else:
+            if fab.opacity > 0:
+                anim = Animation(opacity=0, duration=0.2)
+                anim.bind(on_complete=lambda *a: setattr(fab, 'disabled', True))
+                anim.start(fab)
+
+    def scroll_to_top(self):
+        """Ruller til toppen av listen."""
+        Animation(scroll_y=1, d=0.4, t='out_quad').start(
+            self.root.ids.scroll_view
+        )
+
+    def clear_search_input(self):
+        """Tømmer søkefeltet."""
+        self.root.ids.search_input.text = ""
 
     def trigger_search(self):
         query = self.root.ids.search_input.text.strip()
@@ -415,8 +483,8 @@ class PedagogiskApp(MDApp):
             btn = MDFillRoundFlatButton(
                 text=concept,
                 font_size="11sp",
-                md_bg_color="#FFAB40",
-                text_color="#1A237E",
+                md_bg_color="#FF8F00",
+                text_color="#FFFFFF",
                 size_hint=(None, None),
                 height=dp(32),
                 on_release=lambda x, q=concept: self._search_related(q)
@@ -433,19 +501,21 @@ class PedagogiskApp(MDApp):
         extra_height = (dp(25) if has_authors else 0) + (dp(55) if has_abstract else 0)
         card = MDCard(
             orientation='vertical',
-            padding=dp(15),
+            padding=dp(18),
             size_hint=(1, None),
             height=dp(170) + extra_height,
-            elevation=1,
+            elevation=2,
             radius=[dp(16)],
             md_bg_color="#FFFFFF"
         )
 
         # Topplinje med kilde og år
+        source_colors = {"OPENALEX": "#1565C0", "ERIC": "#00695C"}
+        source_color = source_colors.get(item['source'], "#1A237E")
         header = MDBoxLayout(adaptive_height=True)
         header.add_widget(MDLabel(
             text=item['source'], font_style="Caption",
-            theme_text_color="Secondary", bold=True
+            theme_text_color="Custom", text_color=source_color, bold=True
         ))
         header.add_widget(MDLabel(
             text=str(item['year']), font_style="Caption",
@@ -486,6 +556,7 @@ class PedagogiskApp(MDApp):
         actions = MDBoxLayout(adaptive_height=True, spacing=dp(10))
         actions.add_widget(MDFillRoundFlatButton(
             text="LES MER", font_size="12sp", md_bg_color="#1A237E",
+            text_color="#FFFFFF",
             on_release=lambda x, url=item['url']: webbrowser.open(url)
         ))
         actions.add_widget(MDIconButton(
