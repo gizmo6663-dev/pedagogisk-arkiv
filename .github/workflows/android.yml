@@ -14,10 +14,16 @@ on:
           - 'false'
           - 'true'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      BUILDOZER_IMAGE: kivy/buildozer@sha256:a291fd4c0c9dfce036c7c79c820af6faa6461d386969ea00303b45164ff37ac4
 
     steps:
       - name: Sjekk ut kode
@@ -30,17 +36,33 @@ jobs:
           echo "bt_ver=${BT_VER}" >> "$GITHUB_OUTPUT"
           echo "Påkrevd build-tools-versjon: ${BT_VER}"
 
-      - name: Sett opp cache for .buildozer
+      # Cache 1: Android SDK og NDK – endrer seg kun ved versjonsbump i buildozer.spec
+      - name: Cache Android SDK og NDK
+        uses: actions/cache@v4
+        id: sdk-cache
+        with:
+          path: ~/.buildozer/android/platform
+          key: ${{ runner.os }}-android-platform-bt${{ steps.bt-version.outputs.bt_ver }}
+          restore-keys: |
+            ${{ runner.os }}-android-platform-
+
+      # Cache 2: Python-pakker og recipe-artefakter – endrer seg med requirements.txt
+      - name: Cache Python-pakker og Buildozer-pakker
         uses: actions/cache@v4
         id: buildozer-cache
         with:
-          path: ~/.buildozer
-          # Cache key includes the build-tools version so a version change in
-          # buildozer.spec automatically busts any cached SDK with the wrong build-tools.
-          key: ${{ runner.os }}-buildozer-docker-bt${{ steps.bt-version.outputs.bt_ver }}-${{ hashFiles('buildozer.spec') }}-${{ github.event.inputs.clean_build == 'true' && 'clean' || 'normal' }}
+          path: ~/.buildozer/android/packages
+          key: ${{ runner.os }}-buildozer-pkgs-${{ hashFiles('requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-docker-bt${{ steps.bt-version.outputs.bt_ver }}-
-            ${{ runner.os }}-buildozer-docker-
+            ${{ runner.os }}-buildozer-pkgs-
+
+      # Cache 3: Docker image – sparer pull-tid ved uendret digest
+      - name: Cache Docker image (kivy/buildozer)
+        uses: actions/cache@v4
+        id: docker-cache
+        with:
+          path: /tmp/docker-image
+          key: ${{ runner.os }}-docker-kivy-buildozer-${{ hashFiles('.github/workflows/android.yml') }}
 
       - name: Klargjør Android SDK (cmdline-tools + kompatibilitetssymlenke)
         run: |
@@ -54,8 +76,8 @@ jobs:
           BT_VER="${{ steps.bt-version.outputs.bt_ver }}"
           if [ -d "$HOME/.buildozer/android/platform/android-sdk" ] && \
              [ ! -d "$HOME/.buildozer/android/platform/android-sdk/build-tools/${BT_VER}" ]; then
-            echo "⚠️ build-tools/${BT_VER} mangler i cachet SDK – sletter .buildozer for å tvinge reinstallering"
-            rm -rf ~/.buildozer
+            echo "⚠️ build-tools/${BT_VER} mangler i cachet SDK – sletter platform-mappen for å tvinge reinstallering"
+            rm -rf ~/.buildozer/android/platform
           fi
 
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
@@ -106,12 +128,25 @@ jobs:
             > "$LICENSES_DIR/intel-android-extra-license"
           echo "✅ Android SDK-lisenser er forhåndsgodtatt"
 
+      - name: Last ned eller last inn Docker image
+        run: |
+          IMAGE="${{ env.BUILDOZER_IMAGE }}"
+          mkdir -p /tmp/docker-image
+          if [ -f /tmp/docker-image/buildozer.tar ]; then
+            echo "📦 Laster Docker-image fra cache..."
+            docker load -i /tmp/docker-image/buildozer.tar
+          else
+            echo "📥 Henter Docker-image (pinned digest)..."
+            docker pull "$IMAGE"
+            docker save "$IMAGE" -o /tmp/docker-image/buildozer.tar
+          fi
+
       - name: Bygg APK med Docker
         run: |
           docker run --rm \
             -v "$PWD":/home/user/hostcwd \
             -v "$HOME/.buildozer":/home/user/.buildozer \
-            kivy/buildozer:latest \
+            "${{ env.BUILDOZER_IMAGE }}" \
             android debug
 
       - name: Last opp APK
