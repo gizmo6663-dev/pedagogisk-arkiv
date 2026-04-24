@@ -23,13 +23,23 @@ jobs:
       - name: Sjekk ut kode
         uses: actions/checkout@v4
 
+      - name: Les build-tools-versjon fra buildozer.spec
+        id: bt-version
+        run: |
+          BT_VER=$(grep 'android.sdk_buildtools' buildozer.spec | sed 's/.*=\s*//' | tr -d '[:space:]')
+          echo "bt_ver=${BT_VER}" >> "$GITHUB_OUTPUT"
+          echo "Påkrevd build-tools-versjon: ${BT_VER}"
+
       - name: Sett opp cache for .buildozer
         uses: actions/cache@v4
         id: buildozer-cache
         with:
           path: ~/.buildozer
-          key: ${{ runner.os }}-buildozer-docker-${{ hashFiles('buildozer.spec') }}-${{ github.event.inputs.clean_build == 'true' && 'clean' || 'normal' }}
+          # Cache key includes the build-tools version so a version change in
+          # buildozer.spec automatically busts any cached SDK with the wrong build-tools.
+          key: ${{ runner.os }}-buildozer-docker-bt${{ steps.bt-version.outputs.bt_ver }}-${{ hashFiles('buildozer.spec') }}-${{ github.event.inputs.clean_build == 'true' && 'clean' || 'normal' }}
           restore-keys: |
+            ${{ runner.os }}-buildozer-docker-bt${{ steps.bt-version.outputs.bt_ver }}-
             ${{ runner.os }}-buildozer-docker-
 
       - name: Bygg APK med Docker
@@ -40,10 +50,13 @@ jobs:
             rm -rf ~/.buildozer
           fi
 
-          # Slett ufullstendig SDK-cache hvis build-tools mangler
+          # Slett ufullstendig SDK-cache hvis den påkrevde build-tools-versjonen mangler.
+          # Sjekker den versjonsspesifikke mappen (f.eks. build-tools/33.0.0) – ikke bare
+          # selve build-tools-katalogen – for å unngå feil ved en delvis eller utdatert cache.
+          BT_VER="${{ steps.bt-version.outputs.bt_ver }}"
           if [ -d "$HOME/.buildozer/android/platform/android-sdk" ] && \
-             [ ! -d "$HOME/.buildozer/android/platform/android-sdk/build-tools" ]; then
-            echo "⚠️ build-tools mangler i cachet SDK – sletter .buildozer for å tvinge reinstallering"
+             [ ! -d "$HOME/.buildozer/android/platform/android-sdk/build-tools/${BT_VER}" ]; then
+            echo "⚠️ build-tools/${BT_VER} mangler i cachet SDK – sletter .buildozer for å tvinge reinstallering"
             rm -rf ~/.buildozer
           fi
 
